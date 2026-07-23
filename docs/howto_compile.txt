@@ -1,0 +1,37 @@
+Installation espidf v5.5.2
+cd esp-idf
+./install.sh esp32s3
+source export.sh
+
+
+Clone micropython von master. Die release versionen lassen sich nicht kompilieren.
+git clone -b master --recursive https://github.com/micropython/micropython.git
+
+Example:
+martin@martin-MS-7E26:~/mpsdk/projects/master$ git clone -b master --recursive https://github.com/micropython/micropython.git
+
+Danach muss der Python Cross-Compiler kompiliert werden:
+cd micropython
+make -C mpy-cross
+
+Example:
+martin@martin-MS-7E26:~/mpsdk/projects/master/micropython$ make -C mpy-cross
+
+
+
+The core MicroPython VM and runtime has no external dependencies, but a given port might depend on third-party drivers or vendor HALs. This repository includes several submodules linking to these external dependencies. Before compiling a given port, use
+
+$ cd ports/name
+$ make submodules
+
+Example:
+martin@martin-MS-7E26:~/_git/ServoPython$ cd ports/esp32
+martin@martin-MS-7E26:~/_git/ServoPython/ports/esp32$ make submodules 
+
+
+
+Build für esp32s3 mit Octal Spiram
+cd ports/esp32
+make BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT erase
+make BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT
+make BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT deploy
