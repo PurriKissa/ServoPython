@@ -1,0 +1,248 @@
+Beispiel für einen Erweiterung welche keine Port spezifischen abhägigkeiten hat.
+Es wird eine Funktion erstellt, welches jedes Element eines Bytearrays inkrementiert und in einem anderen Bytearray ausgibt.
+
+Erstellen einer eigenen Micropython extention
+
+Es ist sinnvoll eigene Erweiterungen außerhalb des MicroPython Kerns abzulegen.
+Hier kann beispielsweise ein eigener Ordner my_modules angelegt werden.
+Darunter legt man ein c Modul ab, welches eine bestimmte Erweiterung erfüllen soll.
+
+
+~/micropython/
+├── ports/
+├── py/
+├── extmod/
+└── my_modules/
+    └── incbytearray/
+        ├── mod_incbytearray.c
+        └── micropython.cmake
+        
+        
+
+mod_incbytearray.c
+
+
+DATEI START >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+#include "py/runtime.h"
+#include "py/objarray.h"
+
+// incbytearray(src, dst)
+// dst[i] = src[i] + 1
+// No allocations for data buffers.
+
+
+
+//*********************************************************************************************************************
+// Die eigentliche Funktion
+//*********************************************************************************************************************
+
+static mp_obj_t incbytearray_inc(mp_obj_t src_in, mp_obj_t dst_in) {
+    mp_buffer_info_t src_buf;
+    mp_buffer_info_t dst_buf;
+
+    // Get raw buffer access
+    mp_get_buffer_raise(src_in, &src_buf, MP_BUFFER_READ);
+    mp_get_buffer_raise(dst_in, &dst_buf, MP_BUFFER_WRITE);
+
+    // Check sizes
+    if (dst_buf.len < src_buf.len) {
+        mp_raise_ValueError(MP_ERROR_TEXT("destination too small"));
+    }
+
+    uint8_t *src = (uint8_t *)src_buf.buf;
+    uint8_t *dst = (uint8_t *)dst_buf.buf;
+
+    for (size_t i = 0; i < src_buf.len; i++) {
+        dst[i] = src[i] + 1;
+    }
+
+    // Return the destination object (no allocation)
+    return dst_in;
+}
+
+//*********************************************************************************************************************
+//Erstellen von Pythonfunktionen
+//Es macht aus einer C-Funktion ein MicroPython-Funktionsobjekt, das von der Python-Laufzeit aufgerufen werden kann.
+//*********************************************************************************************************************
+
+static MP_DEFINE_CONST_FUN_OBJ_2(incbytearray_inc_obj, incbytearray_inc);
+
+
+
+//*********************************************************************************************************************
+// Zuordung Schritt 1
+// -----------------------
+// Erzeugen der Zuordung/Beziehung zwischen unserer Funktion und dem Python-Interpreter
+// Das ist erstmal nur eine Tabelle in c welche die Zuordungen definiert.
+// (Micropython kan damit noch nicht direkt arbeiten und muss in einem weiteren Schritt in ein Micropython
+// Dictionary umgewandelt werden)
+//*********************************************************************************************************************
+
+// MicroPython verwendet ein eigenes QSTR-System, das ähnlich wie ein
+// Präprozessor vor dem eigentlichen C-Compiler arbeitet. Die hier verwendeten
+// QSTRs werden beim Build automatisch gesammelt und in interne String-IDs
+// umgewandelt.
+//
+// Der Python-Aufruf:
+//
+//     incbytearray.inc(...)
+//
+// entsteht aus der Zuordnung:
+//
+//     MP_QSTR_incbytearray  -> Modulname
+//     MP_QSTR_inc           -> Funktionsname
+//
+// Möchte man den Python-Namen ändern, muss lediglich der entsprechende QSTR
+// angepasst werden, z.B.:
+//
+//     MP_QSTR_inc
+//
+// wird zu:
+//
+//     MP_QSTR_otherinc
+//
+// Dadurch lautet der Python-Aufruf anschließend:
+//
+//     incbytearray.otherinc(...)
+
+static const mp_rom_map_elem_t incbytearray_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_incbytearray) },
+    { MP_ROM_QSTR(MP_QSTR_inc), MP_ROM_PTR(&incbytearray_inc_obj) },
+};
+
+
+
+//*********************************************************************************************************************
+// Zuordung Schritt 2
+// -----------------------
+// wandelt deine vorher definierte Tabelle mit Modul-Einträgen in ein echtes MicroPython-Dictionary-Objekt um.
+// Das Dictionary incbytearray_globals wird durch das Makro erzeugt.
+// der Input ist die vorher angelegte Tabelle incbytearray_globals_table
+//*********************************************************************************************************************
+
+static MP_DEFINE_CONST_DICT(
+    incbytearray_globals,
+    incbytearray_globals_table
+);
+
+
+
+//*********************************************************************************************************************
+// Module definition
+// Diese Struktur erzeugt das eigentliche MicroPython-Modul-Objekt. Sie verbindet dein vorher erzeugtes Dictionary
+// (incbytearray_globals) mit einem Modul, das Python per import laden kann.
+//*********************************************************************************************************************
+
+const mp_obj_module_t incbytearray_user_cmodule = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t *)&incbytearray_globals,
+};
+
+
+
+//*********************************************************************************************************************
+// Modul in Micropython registrieren
+// registriert dein Modul bei MicroPython, sodass es mit import gefunden werden kann. Sie ist die Verbindung
+// zwischen dem Modulnamen in Python und deinem erzeugten Modulobjekt.
+//*********************************************************************************************************************
+
+MP_REGISTER_MODULE(MP_QSTR_incbytearray, incbytearray_user_cmodule);
+
+DATEI ENDE >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+
+
+
+
+Erzeugen einer micropython.cmake Datei im gleiche ordner wie das c-Modul
+
+DATEI START >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+# Erzeugt eine INTERFACE-Bibliothek mit dem Namen "usermod_incbytearray".
+# INTERFACE bedeutet: Es wird keine eigene Bibliothek gebaut, sondern nur
+# Build-Informationen (Quellen, Include-Pfade usw.) bereitgestellt.
+add_library(usermod_incbytearray INTERFACE)
+
+# Fügt die C-Quelldatei dem Modul hinzu.
+# ${CMAKE_CURRENT_LIST_DIR} ist das Verzeichnis, in dem diese micropython.cmake liegt.
+target_sources(usermod_incbytearray INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}/mod_incbytearray.c
+)
+
+# Fügt dieses Verzeichnis zu den Include-Pfaden hinzu.
+# Dadurch können Header aus diesem Ordner mit #include gefunden werden.
+target_include_directories(usermod_incbytearray INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}
+)
+
+# Verknüpft das eigene Modul mit der von MicroPython bereitgestellten
+# Sammelbibliothek "usermod". Dadurch wird das Modul in die Firmware aufgenommen.
+target_link_libraries(usermod INTERFACE usermod_incbytearray)
+
+DATEI ENDE >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+Bauen von Micropython mit dem eigenen Modul
+
+Zur Erinnerung:
+~/micropython/
+├── ports/
+├── py/
+├── extmod/
+└── my_modules/
+    └── incbytearray/
+        ├── mod_incbytearray.c
+        └── micropython.cmake
+        
+
+make BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT USER_C_MODULES=../../../my_modules/incbytearray
+
+
+
+Beispiel funktion mit integer rückgabewert:
+static mp_obj_t incbytearray_inc(mp_obj_t src_in, mp_obj_t dst_in) {
+    mp_buffer_info_t src_buf;
+    mp_buffer_info_t dst_buf;
+
+    // Buffer-Zugriff holen
+    mp_get_buffer_raise(src_in, &src_buf, MP_BUFFER_READ);
+    mp_get_buffer_raise(dst_in, &dst_buf, MP_BUFFER_WRITE);
+
+    // Prüfen, ob Ziel groß genug ist
+    if (dst_buf.len < src_buf.len) {
+        mp_raise_ValueError(MP_ERROR_TEXT("destination too small"));
+    }
+
+    uint8_t *src = (uint8_t *)src_buf.buf;
+    uint8_t *dst = (uint8_t *)dst_buf.buf;
+
+    for (size_t i = 0; i < src_buf.len; i++) {
+        dst[i] = src[i] + 1;
+    }
+
+    // Anzahl der geschriebenen Bytes zurückgeben
+    return mp_obj_new_int(dst_buf.len);
+}
+
+
+
+COBS in Python:
+import cobs
+
+src_data = bytearray([0,10,0,30,0,50,60,70,80])
+dst_encoded = bytearray(20)
+encoded_len = cobs.encode(src_data, dst_encoded)
+
+dst_decoded = bytearray(20)
+decoded_len = cobs.decoded(dst_encoded, encoded_len, dst_decoded)
+
+for i in range(decoded_len):
+	print(dst_decoded[i]
+	
+
+
+
+
+
