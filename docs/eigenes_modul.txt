@@ -236,10 +236,10 @@ dst_encoded = bytearray(20)
 encoded_len = cobs.encode(src_data, dst_encoded)
 
 dst_decoded = bytearray(20)
-decoded_len = cobs.decoded(dst_encoded, encoded_len, dst_decoded)
+decoded_len = cobs.decode(dst_encoded, encoded_len, dst_decoded)
 
 for i in range(decoded_len):
-	print(dst_decoded[i]
+	print(dst_decoded[i])
 	
 
 

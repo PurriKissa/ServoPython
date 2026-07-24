@@ -13,12 +13,14 @@ static mp_obj_t cobs_encode(mp_obj_t src_in, mp_obj_t dst_in)
 	mp_get_buffer_raise(dst_in, &dst_buf, MP_BUFFER_WRITE);   
     
 	// Check sizes
-	if (dst_buf.len < src_buf.len)
+	size_t required = src_buf.len + (src_buf.len / 254) + 2;
+
+	if (dst_buf.len < required)
 	{
-		mp_raise_ValueError(MP_ERROR_TEXT("destination too small"));
+    		mp_raise_ValueError(MP_ERROR_TEXT("destination too small"));
 	}
     
-	int length = src_buf.len;
+	size_t length = src_buf.len;
 
 	uint8_t* data   = (uint8_t*)src_buf.buf;
 	uint8_t* buffer = (uint8_t*)dst_buf.buf;
@@ -42,7 +44,7 @@ static mp_obj_t cobs_encode(mp_obj_t src_in, mp_obj_t dst_in)
 	}
 	*codep = code; // Write final code value
 
-	return mp_obj_new_int((int)(encode - buffer));
+	return mp_obj_new_int_from_uint((mp_uint_t)(encode-buffer));
 }
 
 
@@ -64,12 +66,14 @@ static mp_obj_t cobs_decode(mp_obj_t src_in, mp_obj_t src_len, mp_obj_t dst_in)
 	}
 	
 	
-	if (dst_buf.len < src_buf.len)
+	size_t length = src_buf_length;
+	
+	if (dst_buf.len < src_buf_length)
 	{
 		mp_raise_ValueError(MP_ERROR_TEXT("destination too small"));
 	}
 
-	int length = src_buf_length;
+	
 	
 	uint8_t* buffer = (uint8_t*)src_buf.buf;
 	uint8_t* data   = (uint8_t*)dst_buf.buf;
@@ -92,7 +96,7 @@ static mp_obj_t cobs_decode(mp_obj_t src_in, mp_obj_t src_len, mp_obj_t dst_in)
 		}
 	}
 
-	return mp_obj_new_int((int)(decode - (uint8_t *)data));
+	return mp_obj_new_int_from_uint((mp_uint_t)(decode - data));
 }
 
 
